@@ -244,3 +244,4 @@ if __name__ == "__main__":
         main()
     except:
         sys.exit(1)
+# vim: set ft=python:
