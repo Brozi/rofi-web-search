@@ -34,7 +34,7 @@ CONFIG = {
         "chromium": ["chromium-browser"],
         "brave": ["brave-browser"],
         "brave-beta": ["brave-beta"],
-        "vivaldi": ["vivaldi-stable", "vivaldi"],
+        "vivaldi": ["vivaldi-stable"],
         "lynx": TERMINAL + ["lynx"],
     },
     "USER_AGENT": {
