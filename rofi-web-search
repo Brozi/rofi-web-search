@@ -18,20 +18,21 @@ import html
 ################################################################################
 SEARCH_ENGINE = "brave-search"  # or 'duckduckgo'
 BROWSER = "brave-beta"  # or 'firefox', 'chromium', 'brave', 'lynx'
-TERMINAL = ["gnome-terminal", "--"]  # or ['st', '-e'] or something like that
+TERMINAL = "gnome-terminal"  # or ['st', '-e'] or something like that
+TERMINAL_ARG = "--"  # the arg for the terminal to launch an app
 CACHE_DIR = os.path.expanduser("~/.cache/rofi-web-search")
 CACHE_FILE = os.path.join(CACHE_DIR, "user_agent.txt")
 ################################################################################
 
 CONFIG = {
     "BROWSER_PATH": {
-        "chrome": ["google-chrome-stable"],
-        "firefox": ["firefox"],
-        "chromium": ["chromium-browser"],
-        "brave": ["brave-browser"],
-        "brave-beta": ["brave-beta"],
-        "vivaldi": ["vivaldi-stable"],
-        "lynx": TERMINAL + ["lynx"],
+        "chrome": "google-chrome-stable",
+        "firefox": "firefox",
+        "chromium": "chromium-browser",
+        "brave": "brave-browser",
+        "brave-beta": "brave-beta",
+        "vivaldi": "vivaldi-stable",
+        "lynx": TERMINAL + TERMINAL_ARG + "lynx",
     },
     "SEARCH_ENGINE_NAME": {
         "google": "Google",
@@ -129,7 +130,7 @@ def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
 
 
 def fetch_suggestions(search_string: str):
-    user_agent = get_cached_user_agent()
+    user_agent = get_cached_user_agent(BROWSER, CONFIG["BROWSER_PATH"][BROWSER])
 
     if SEARCH_ENGINE == "google":
         r = {
@@ -180,7 +181,7 @@ def fetch_suggestions(search_string: str):
             "dnt": "1",
             "accept-encoding": "gzip",
             "accept-language": "en-US;q=0.9,en;q=0.8",
-            "user-agent": current_ua,
+            "user-agent": user_agent,
             "sec-fetch-mode": "no-cors",
             "accept": "*/*",
             "cache-control": "no-cache",
