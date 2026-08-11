@@ -14,13 +14,26 @@ import urllib.request
 ################################################################################
 #####                      C O N F I G U R A T I O N                      ######
 ################################################################################
-SEARCH_ENGINE = "brave-search"  # or 'duckduckgo'
-BROWSER = "brave-beta"  # or 'firefox', 'chromium', 'brave', 'lynx'
-TERMINAL = "gnome-terminal"  # or ['st', '-e'] or something like that
-TERMINAL_ARG = "--"  # the arg for the terminal to launch an app
 CACHE_DIR = os.path.expanduser("~/.cache/rofi-web-search")
 CACHE_FILE = os.path.join(CACHE_DIR, "user_agent.txt")
+CONFIG_DIR = os.path.expanduser("~/.config/rofi-web-search")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+
 ################################################################################
+def load_config():
+    _config = DEFAULT_CONFIG.copy()
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            user_config = json.load(f)
+            validate_config(user_config)
+            _config.update(user_config)  # Overwrite defaults with user settings
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass  # Silently fall back to the defaults
+    return _config
+
+
+CONFIG = load_config()
 
 # You can add your own browsers here
 # As long as their --version output is similar to the existing ones
@@ -32,7 +45,7 @@ BINARY_NAMES = {
     "brave": "brave-browser",
     "brave-beta": "brave-beta",
     "vivaldi": "vivaldi-stable",
-    "lynx": TERMINAL + TERMINAL_ARG + "lynx",
+    "lynx": CONFIG["TERMINAL"] + CONFIG["TERMINAL_ARG"] + "lynx",
 }
 SEARCH_ENGINE_NAMES = {
     "google": "Google",
@@ -136,21 +149,7 @@ def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
     return user_agent
 
 
-def load_config():
-    config = DEFAULT_CONFIG.copy()
-    try:
-        with open(CACHE_FILE.replace("user_agent.txt", "config.json"), "r") as f:
-            user_config = json.load(f)
-            config.update(user_config)  # Overwrite defaults with user settings
-    except (FileNotFoundError, json.JSONDecodeError):
-        pass  # Silently fall back to the defaults
-    return config
-
-
-CONFIG = load_config()
-
-
-def fetch_suggestions(search_string: str) -> str | list[str]:
+def fetch_suggestions(search_string: str, config: dict[str, str]) -> str | list[str]:
     browser_key = config["BROWSER"]
     search_engine = config["SEARCH_ENGINE"]
     binary_name = BINARY_NAMES[browser_key]
@@ -189,7 +188,7 @@ def fetch_suggestions(search_string: str) -> str | list[str]:
         reply_data = gzip.decompress(urllib.request.urlopen(req).read()).split(b"\n")[1]
         reply_data = json.loads(reply_data)
         return [cleanhtml(res[0]).strip() for res in reply_data[0]]
-    elif SEARCH_ENGINE == "duckduckgo":  # 'duckduckgo'
+    elif search_engine == "duckduckgo":  # 'duckduckgo'
         if search_string.startswith("!"):
             bang_search = True
             search_string = search_string.lstrip("!")
@@ -201,7 +200,7 @@ def fetch_suggestions(search_string: str) -> str | list[str]:
             "kl": "wt-wt",
             "_": str(int((datetime.datetime.now().timestamp()) * 1000)),
         }
-        url = SUGGESTION_URLS[browser_key] + urllib.parse.urlencode(r)
+        url = suggestions_url + urllib.parse.urlencode(r)
         if bang_search:
             url = url.replace("?q=", "?q=!")
         headers = {
@@ -223,17 +222,47 @@ def fetch_suggestions(search_string: str) -> str | list[str]:
             re.match(r"autocompleteCallback\((.*)\);", reply_data).group(1)
         )
         return [cleanhtml(res["phrase"]).strip() for res in reply_data]
-    elif SEARCH_ENGINE == "startpage":
+    elif search_engine == "startpage":
         pass
 
 
-def main():
+def validate_config(config: dict[str, str]):
+    if type(config) is not dict:
+        print("Configuration file must be a JSON object", file=sys.stderr)
+        sys.exit(1)
+    for key in DEFAULT_CONFIG.keys():
+        if key not in config:
+            print(f"Configuration file is missing {key}", file=sys.stderr)
+            sys.exit(1)
+    for key in ("SEARCH_ENGINE", "BROWSER"):
+        if type(config[key]) is not str:
+            print(
+                f"Configuration Error: The value of {key} must be a string",
+                file=sys.stderr,
+            )
+    if type(config["TERMINAL"]) is not str:
+        print(
+            "Configuration Error: The value of TERMINAL must be a string",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if type(config["TERMINAL_ARG"]) is not str:
+        print(
+            "Configuration Error: The value of TERMINAL_ARG must be a string",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    config = load_config()
     search_engine = config["SEARCH_ENGINE"]
     search_string = html.unescape((" ".join(sys.argv[1:])).strip())
+    browser_key = config["BROWSER"]
 
     if search_string.endswith("!"):
         search_string = search_string.rstrip("!").strip()
-        results = fetch_suggestions(search_string)
+        results = fetch_suggestions(search_string, config)
         if results:
             for r in results:
                 print(html.unescape(r))
@@ -244,71 +273,10 @@ def main():
         print('!!-- Close your search string with "!" to get search suggestions')
     else:
         url = SEARCH_URLS[search_engine] + urllib.parse.quote_plus(search_string)
-        sp.Popen(
-            str(CONFIG["BROWSER_PATH"][BROWSER]) + str([url]),
+        _ = sp.Popen(
+            [BINARY_NAMES[browser_key], url],
             stdout=sp.DEVNULL,
             stderr=sp.DEVNULL,
             shell=False,
         )
-
-
-def validate_config(c):
-    if type(c) != dict:
-        print("Configuration file must be a JSON object", file=sys.stderr)
-        sys.exit(1)
-    for k in ("SEARCH_ENGINE", "BROWSER", "TERMINAL"):
-        if k not in c:
-            print("Configuration file is missing %s" % k, file=sys.stderr)
-            sys.exit(1)
-    for k in ("SEARCH_ENGINE", "BROWSER"):
-        if type(c[k]) != str:
-            print(
-                "Configuration Error: The value of %s must be a string" % k,
-                file=sys.stderr,
-            )
-    if type(c["TERMINAL"]) != list:
-        print(
-            "Configuration Error: The value of TERMINAL must be a list of strings",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    for x in c["TERMINAL"]:
-        if type(x) != str:
-            print(
-                "Configuration Error: The value of TERMINAL must be a list of strings",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-
-if __name__ == "__main__":
-    try:
-        fname = os.path.expanduser("~/.config/rofi-web-search/config.json")
-        if os.path.exists(fname):
-            try:
-                config = json.loads(open(fname, "r").read())
-            except json.JSONDecodeError:
-                print(
-                    "Configuration file %s is not a valid JSON" % fname, file=sys.stderr
-                )
-                sys.exit(1)
-            validate_config(config)
-            SEARCH_ENGINE = config["SEARCH_ENGINE"]
-            BROWSER = config["BROWSER"]
-            TERMINAL = config["TERMINAL"]
-        else:
-            # Create default config
-            config = {
-                "SEARCH_ENGINE": SEARCH_ENGINE,
-                "BROWSER": BROWSER,
-                "TERMINAL": TERMINAL,
-            }
-            os.makedirs(os.path.dirname(fname))
-            f = open(fname, "w")
-            f.write(json.dumps(config, indent=4))
-            f.write("\n")
-            f.close()
-        main()
-    except:
-        sys.exit(1)
 # vim: set ft=python:
