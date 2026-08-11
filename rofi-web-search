@@ -156,20 +156,19 @@ def fetch_suggestions(search_string: str) -> str | list[str]:
     binary_name = BINARY_NAMES[browser_key]
     if search_engine in SUGGESTIONS_INCOMPATIBLE:
         return f"Suggestions from {search_engine} are not supported."
-    else: 
-        suggestions_url = SUGGESTION_URLS[browser_key]
+    suggestions_url = SUGGESTION_URLS[browser_key]
 
-        user_agent = get_cached_user_agent(browser_key, binary_name)
+    user_agent = get_cached_user_agent(browser_key, binary_name)
 
-        if search_engine == "google":
-            r = {
-                "q": search_string,
-                "cp": "11",
-                "client": "psy-ab",
-                "xssi": "t",
-                "gs_ri": "gws-wiz",
-                "hl": "en-IT",
-                "authuser": "0",
+    if search_engine == "google":
+        r = {
+            "q": search_string,
+            "cp": "11",
+            "client": "psy-ab",
+            "xssi": "t",
+            "gs_ri": "gws-wiz",
+            "hl": "en-IT",
+            "authuser": "0",
         }
         url = suggestions_url + urllib.parse.urlencode(r)
         headers = {
@@ -232,7 +231,7 @@ def main():
     search_engine = config["SEARCH_ENGINE"]
     search_string = html.unescape((" ".join(sys.argv[1:])).strip())
 
-    if (search_string.endswith("!")):
+    if search_string.endswith("!"):
         search_string = search_string.rstrip("!").strip()
         results = fetch_suggestions(search_string)
         if results:
