@@ -331,7 +331,9 @@ if __name__ == "__main__":
     elif search_string == "":
         print(f"!!-- Type something and search it with {default_search_engine} ")
         print("!!-- Close your search string with '!' to get search suggestions")
-        print("!!-- Start your search string with '!' to choose the search engine")
+        print(
+            "!!-- Start your search string with '! <engine-name>' to choose the search engine"
+        )
     else:
         url = SEARCH_URLS[active_engine] + urllib.parse.quote_plus(search_string)
         _ = sp.Popen(
