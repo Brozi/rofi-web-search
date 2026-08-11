@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-import json
-import re
-import urllib.parse
-import urllib.request
-import sys
-import os
-import shutil
 import datetime
 import gzip
-
-import subprocess as sp
-
 import html
+import json
+import os
+import re
+import shutil
+import subprocess as sp
+import sys
+import urllib.parse
+import urllib.request
 
 ################################################################################
 #####                      C O N F I G U R A T I O N                      ######
@@ -24,41 +22,39 @@ CACHE_DIR = os.path.expanduser("~/.cache/rofi-web-search")
 CACHE_FILE = os.path.join(CACHE_DIR, "user_agent.txt")
 ################################################################################
 
-CONFIG = {
-    "BROWSER_PATH": {
-        "chrome": "google-chrome-stable",
-        "firefox": "firefox",
-        "chromium": "chromium-browser",
-        "brave": "brave-browser",
-        "brave-beta": "brave-beta",
-        "vivaldi": "vivaldi-stable",
-        "lynx": TERMINAL + TERMINAL_ARG + "lynx",
-    },
-    "SEARCH_ENGINE_NAME": {
-        "google": "Google",
-        "duckduckgo": "DuckDuckGo",
-        "brave-search": "Brave Search",
-        "startpage": "Startpage",
-        "youtube": "YouTube",
-        "github": "GitHub",
-    },
-    "SEARCH_URL": {
-        "google": "https://www.google.com/search?q=",
-        "duckduckgo": "https://duckduckgo.com/?q=",
-        "brave-search": "https://search.brave.com/search?q=",
-        "startpage": "https://www.startpage.com/do/search?q=",
-        "youtube": "https://www.youtube.com/results?search_query=",
-        "github": "https://github.com/search?q=",
-        "reddit": "https://www.reddit.com/search/?q=",
-    },
-    "SUGGESTION_URL": {
-        "google": "https://www.google.com/complete/search?",
-        "duckduckgo": "https://duckduckgo.com/ac/?",
-        "startpage": "https://www.startpage.com/suggestions?q=",
-    },
+BROWSER_PATH = {
+    "chrome": "google-chrome-stable",
+    "firefox": "firefox",
+    "chromium": "chromium-browser",
+    "brave": "brave-browser",
+    "brave-beta": "brave-beta",
+    "vivaldi": "vivaldi-stable",
+    "lynx": TERMINAL + TERMINAL_ARG + "lynx",
+}
+SEARCH_ENGINE_NAME = {
+    "google": "Google",
+    "duckduckgo": "DuckDuckGo",
+    "brave-search": "Brave Search",
+    "startpage": "Startpage",
+    "youtube": "YouTube",
+    "github": "GitHub",
+}
+SEARCH_URL = {
+    "google": "https://www.google.com/search?q=",
+    "duckduckgo": "https://duckduckgo.com/?q=",
+    "brave-search": "https://search.brave.com/search?q=",
+    "startpage": "https://www.startpage.com/do/search?q=",
+    "youtube": "https://www.youtube.com/results?search_query=",
+    "github": "https://github.com/search?q=",
+    "reddit": "https://www.reddit.com/search/?q=",
+}
+SUGGESTION_URL = {
+    "google": "https://www.google.com/complete/search?",
+    "duckduckgo": "https://duckduckgo.com/ac/?",
+    "startpage": "https://www.startpage.com/suggestions?q=",
 }
 
-SUGGESTIONS_INCOMPATIBLE = ("brave-search", "github", "youtube", "reddit")
+SUGGESTIONS_INCOMPATIBLE = ["brave-search", "github", "youtube", "reddit"]
 
 # Linux desktop User-Agent templates
 TEMPLATES = {
@@ -69,6 +65,13 @@ TEMPLATES = {
 }
 
 FALLBACK_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
+
+DEFAULT_CONFIG = {
+    "SEARCH_ENGINE": "google",
+    "BROWSER": "firefox",
+    "TERMINAL": "gnome-terminal",
+    "TERMINAL_ARG": "--",
+}
 
 
 def cleanhtml(txt):
@@ -127,6 +130,20 @@ def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
     except OSError:
         pass
     return user_agent
+
+
+def load_config():
+    config = DEFAULT_CONFIG.copy()
+    try:
+        with open(CACHE_FILE.replace("user_agent.txt", "config.json"), "r") as f:
+            user_config = json.load(f)
+            config.update(user_config)  # Overwrite defaults with user settings
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass  # Silently fall back to the defaults
+    return config
+
+
+CONFIG = load_config()
 
 
 def fetch_suggestions(search_string: str):
