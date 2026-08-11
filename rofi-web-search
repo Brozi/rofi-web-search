@@ -90,6 +90,15 @@ def get_binary_version(binary_name: str) -> str | None:
         return None
 
 
+def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
+    """Returns a valid User_Agent string from cache, updating it if the binary was updated"""
+    bin_path = shutil.which(binary_name)
+
+    # if the binary it not found on PATH, fall back immediately
+    if not bin_path or not os.path.exists(bin_path):
+        return FALLBACK_UA
+
+
 def fetch_suggestions(search_string: str):
     ua = UserAgent(
         platforms=["desktop"],
