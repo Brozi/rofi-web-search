@@ -25,7 +25,7 @@ CACHE_FILE = os.path.join(CACHE_DIR, "user_agent.txt")
 # You can add your own browsers here
 # As long as their --version output is similar to the existing ones
 # The program should work well
-BROWSER_PATH = {
+BINARY_NAMES = {
     "chrome": "google-chrome-stable",
     "firefox": "firefox",
     "chromium": "chromium-browser",
@@ -34,15 +34,16 @@ BROWSER_PATH = {
     "vivaldi": "vivaldi-stable",
     "lynx": TERMINAL + TERMINAL_ARG + "lynx",
 }
-SEARCH_ENGINE_NAME = {
+SEARCH_ENGINE_NAMES = {
     "google": "Google",
     "duckduckgo": "DuckDuckGo",
     "brave-search": "Brave Search",
     "startpage": "Startpage",
     "youtube": "YouTube",
     "github": "GitHub",
+    "reddit": "Reddit",
 }
-SEARCH_URL = {
+SEARCH_URLS = {
     "google": "https://www.google.com/search?q=",
     "duckduckgo": "https://duckduckgo.com/?q=",
     "brave-search": "https://search.brave.com/search?q=",
@@ -51,7 +52,7 @@ SEARCH_URL = {
     "github": "https://github.com/search?q=",
     "reddit": "https://www.reddit.com/search/?q=",
 }
-SUGGESTION_URL = {
+SUGGESTION_URLS = {
     "google": "https://www.google.com/complete/search?",
     "duckduckgo": "https://duckduckgo.com/ac/?",
     "startpage": "https://www.startpage.com/suggestions?q=",
@@ -149,20 +150,28 @@ def load_config():
 CONFIG = load_config()
 
 
-def fetch_suggestions(search_string: str):
-    user_agent = get_cached_user_agent(BROWSER, CONFIG["BROWSER_PATH"][BROWSER])
+def fetch_suggestions(search_string: str) -> str | list[str]:
+    browser_key = config["BROWSER"]
+    search_engine = config["SEARCH_ENGINE"]
+    binary_name = BINARY_NAMES[browser_key]
+    if search_engine in SUGGESTIONS_INCOMPATIBLE:
+        return f"Suggestions from {search_engine} are not supported."
+    else: 
+        suggestions_url = SUGGESTION_URLS[browser_key]
 
-    if SEARCH_ENGINE == "google":
-        r = {
-            "q": search_string,
-            "cp": "11",
-            "client": "psy-ab",
-            "xssi": "t",
-            "gs_ri": "gws-wiz",
-            "hl": "en-IT",
-            "authuser": "0",
+        user_agent = get_cached_user_agent(browser_key, binary_name)
+
+        if search_engine == "google":
+            r = {
+                "q": search_string,
+                "cp": "11",
+                "client": "psy-ab",
+                "xssi": "t",
+                "gs_ri": "gws-wiz",
+                "hl": "en-IT",
+                "authuser": "0",
         }
-        url = str(CONFIG["SUGGESTION_URL"][SEARCH_ENGINE]) + urllib.parse.urlencode(r)
+        url = suggestions_url + urllib.parse.urlencode(r)
         headers = {
             "sec-fetch-mode": "cors",
             "dnt": "1",
@@ -193,7 +202,7 @@ def fetch_suggestions(search_string: str):
             "kl": "wt-wt",
             "_": str(int((datetime.datetime.now().timestamp()) * 1000)),
         }
-        url = str(CONFIG["SUGGESTION_URL"][SEARCH_ENGINE]) + urllib.parse.urlencode(r)
+        url = SUGGESTION_URLS[browser_key] + urllib.parse.urlencode(r)
         if bang_search:
             url = url.replace("?q=", "?q=!")
         headers = {
@@ -220,31 +229,22 @@ def fetch_suggestions(search_string: str):
 
 
 def main():
+    search_engine = config["SEARCH_ENGINE"]
     search_string = html.unescape((" ".join(sys.argv[1:])).strip())
 
-    if (search_string.endswith("!")) and (
-        SEARCH_ENGINE not in SUGGESTIONS_INCOMPATIBLE
-    ):
+    if (search_string.endswith("!")):
         search_string = search_string.rstrip("!").strip()
         results = fetch_suggestions(search_string)
-        for r in results:
-            print(html.unescape(r))
+        if results:
+            for r in results:
+                print(html.unescape(r))
+        else:
+            print("!!-- No suggestions found")
     elif search_string == "":
-        print(
-            "!!-- Type something and search it with %s"
-            % CONFIG["SEARCH_ENGINE_NAME"][SEARCH_ENGINE]
-        )
+        print(f"!!-- Type something and search it with {search_engine} ")
         print('!!-- Close your search string with "!" to get search suggestions')
-    elif (search_string.endswith("!")) and (SEARCH_ENGINE in SUGGESTIONS_INCOMPATIBLE):
-        print(
-            "Suggestions from",
-            CONFIG["SEARCH_ENGINE_NAME"][SEARCH_ENGINE],
-            "are not supported.",
-        )
     else:
-        url = str(CONFIG["SEARCH_URL"][SEARCH_ENGINE]) + urllib.parse.quote_plus(
-            search_string
-        )
+        url = SEARCH_URLS[search_engine] + urllib.parse.quote_plus(search_string)
         sp.Popen(
             str(CONFIG["BROWSER_PATH"][BROWSER]) + str([url]),
             stdout=sp.DEVNULL,
