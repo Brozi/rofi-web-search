@@ -98,6 +98,33 @@ def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
     # if the binary it not found on PATH, fall back immediately
     if not bin_path or not os.path.exists(bin_path):
         return FALLBACK_UA
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    bin_mtime = os.path.getmtime((bin_path))
+
+    # check if cache exists and is newer than the binary itself
+    if os.path.exists(CACHE_FILE):
+        cache_mtime = os.path.getmtime(CACHE_FILE)
+        if cache_mtime >= bin_mtime:
+            try:
+                with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                    cached_data = f.read().strip()
+                    if cached_data:
+                        return cached_data
+            except OSError:
+                pass
+    # cache miss or binary was updated by the package manager
+    version = get_binary_version(binary_name)
+    if not version:
+        return FALLBACK_UA
+    template = TEMPLATES.get(browser_key, TEMPLATES["firefox"])
+    user_agent = template.format(ver=version)
+    # write the new cache file
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            _ = f.write(user_agent)
+    except OSError:
+        pass
+    return user_agent
 
 
 def fetch_suggestions(search_string: str):
