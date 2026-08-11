@@ -22,6 +22,9 @@ CACHE_DIR = os.path.expanduser("~/.cache/rofi-web-search")
 CACHE_FILE = os.path.join(CACHE_DIR, "user_agent.txt")
 ################################################################################
 
+# You can add your own browsers here
+# As long as their --version output is similar to the existing ones
+# The program should work well
 BROWSER_PATH = {
     "chrome": "google-chrome-stable",
     "firefox": "firefox",
