@@ -13,7 +13,6 @@ import subprocess as sp
 
 import html
 
-test
 ################################################################################
 #####                      C O N F I G U R A T I O N                      ######
 ################################################################################
@@ -112,12 +111,14 @@ def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
                         return cached_data
             except OSError:
                 pass
+
     # cache miss or binary was updated by the package manager
     version = get_binary_version(binary_name)
     if not version:
         return FALLBACK_UA
     template = TEMPLATES.get(browser_key, TEMPLATES["firefox"])
     user_agent = template.format(ver=version)
+
     # write the new cache file
     try:
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
@@ -128,13 +129,8 @@ def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
 
 
 def fetch_suggestions(search_string: str):
-    ua = UserAgent(
-        platforms=["desktop"],
-        browsers=["chrome", "firefox", "vivaldi", "brave"],
-        os=["Linux"],
-        fallback="Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0",
-    )
-    current_ua = ua.random
+    user_agent = get_cached_user_agent()
+
     if SEARCH_ENGINE == "google":
         r = {
             "q": search_string,
@@ -152,7 +148,7 @@ def fetch_suggestions(search_string: str):
             "accept-encoding": "gzip",
             "accept-language": "en-US;q=0.9,en;q=0.8",
             "pragma": "no-cache",
-            "user-agent": current_ua,
+            "user-agent": user_agent,
             "accept": "*/*",
             "cache-control": "no-cache",
             "authority": "www.google.com",
