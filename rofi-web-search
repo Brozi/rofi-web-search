@@ -85,7 +85,7 @@ def get_binary_version(binary_name: str) -> str | None:
         output = sp.check_output(
             [bin_path, "--version"], stderr=sp.DEVNULL, timeout=1.0, text=True
         )
-        match = re.search(r"\d+(\.\d+)+)", output)
+        match = re.search(r"(\d+(\.\d+)+)", output)
         return match.group(1) if match else None
     except (sp.SubprocessError, OSError):
         return None
