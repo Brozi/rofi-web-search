@@ -5,6 +5,7 @@ import urllib.parse
 import urllib.request
 import sys
 import os
+import shutil
 import datetime
 import gzip
 
@@ -18,6 +19,8 @@ import html
 SEARCH_ENGINE = "brave-search"  # or 'duckduckgo'
 BROWSER = "brave-beta"  # or 'firefox', 'chromium', 'brave', 'lynx'
 TERMINAL = ["gnome-terminal", "--"]  # or ['st', '-e'] or something like that
+CACHE_DIR = os.path.expanduser("~/.cache/rofi-web-search")
+CACHE_FILE = os.path.join(CACHE_DIR, "user_agent.txt")
 ################################################################################
 
 CONFIG = {
@@ -56,12 +59,26 @@ CONFIG = {
 
 SUGGESTIONS_INCOMPATIBLE = ("brave-search", "github", "youtube", "reddit")
 
+# Linux desktop User-Agent templates
+TEMPLATES = {
+    "firefox": "Mozilla/5.0 (X11; Linux x86_64; rv:{ver}) Gecko/20100101 Firefox/{ver}",
+    "chrome": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver} Safari/537.36",
+    "chromium": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver} Safari/537.36",
+    "brave": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver} Safari/537.36",
+}
+
+FALLBACK_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
+
 
 def cleanhtml(txt):
     return re.sub(r"<.*?>", "", txt)
 
+def get_binary_version(binary_name: str) -> str | None:
+    """Runs <binary> --version and parses out the first semantic version string"""
+    bin_path = shutil.which(binary_name)
 
-def fetch_suggestions(search_string):
+
+def fetch_suggestions(search_string: str):
     ua = UserAgent(
         platforms=["desktop"],
         browsers=["chrome", "firefox", "vivaldi", "brave"],
@@ -79,7 +96,7 @@ def fetch_suggestions(search_string):
             "hl": "en-IT",
             "authuser": "0",
         }
-        url = CONFIG["SUGGESTION_URL"][SEARCH_ENGINE] + urllib.parse.urlencode(r)
+        url = str(CONFIG["SUGGESTION_URL"][SEARCH_ENGINE]) + urllib.parse.urlencode(r)
         headers = {
             "sec-fetch-mode": "cors",
             "dnt": "1",
@@ -110,7 +127,7 @@ def fetch_suggestions(search_string):
             "kl": "wt-wt",
             "_": str(int((datetime.datetime.now().timestamp()) * 1000)),
         }
-        url = CONFIG["SUGGESTION_URL"][SEARCH_ENGINE] + urllib.parse.urlencode(r)
+        url = str(CONFIG["SUGGESTION_URL"][SEARCH_ENGINE]) + urllib.parse.urlencode(r)
         if bang_search:
             url = url.replace("?q=", "?q=!")
         headers = {
@@ -159,18 +176,18 @@ def main():
             "are not supported.",
         )
     else:
-        url = CONFIG["SEARCH_URL"][SEARCH_ENGINE] + urllib.parse.quote_plus(
+        url = str(CONFIG["SEARCH_URL"][SEARCH_ENGINE]) + urllib.parse.quote_plus(
             search_string
         )
         sp.Popen(
-            CONFIG["BROWSER_PATH"][BROWSER] + [url],
+            str(CONFIG["BROWSER_PATH"][BROWSER]) + str([url]),
             stdout=sp.DEVNULL,
             stderr=sp.DEVNULL,
             shell=False,
         )
 
 
-def validate_config(c):
+def validate_config(c: dict[]):
     if type(c) != dict:
         print("Configuration file must be a JSON object", file=sys.stderr)
         sys.exit(1)
