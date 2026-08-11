@@ -5,6 +5,7 @@ import urllib.parse
 import urllib.request
 import sys
 import os
+import shutil
 import datetime
 import gzip
 
@@ -17,18 +18,21 @@ import html
 ################################################################################
 SEARCH_ENGINE = "brave-search"  # or 'duckduckgo'
 BROWSER = "brave-beta"  # or 'firefox', 'chromium', 'brave', 'lynx'
-TERMINAL = ["gnome-terminal", "--"]  # or ['st', '-e'] or something like that
+TERMINAL = "gnome-terminal"  # or ['st', '-e'] or something like that
+TERMINAL_ARG = "--"  # the arg for the terminal to launch an app
+CACHE_DIR = os.path.expanduser("~/.cache/rofi-web-search")
+CACHE_FILE = os.path.join(CACHE_DIR, "user_agent.txt")
 ################################################################################
 
 CONFIG = {
     "BROWSER_PATH": {
-        "chrome": ["google-chrome-stable"],
-        "firefox": ["firefox"],
-        "chromium": ["chromium-browser"],
-        "brave": ["brave-browser"],
-        "brave-beta": ["brave-beta"],
-        "vivaldi": ["vivaldi-stable"],
-        "lynx": TERMINAL + ["lynx"],
+        "chrome": "google-chrome-stable",
+        "firefox": "firefox",
+        "chromium": "chromium-browser",
+        "brave": "brave-browser",
+        "brave-beta": "brave-beta",
+        "vivaldi": "vivaldi-stable",
+        "lynx": TERMINAL + TERMINAL_ARG + "lynx",
     },
     "SEARCH_ENGINE_NAME": {
         "google": "Google",
@@ -56,19 +60,78 @@ CONFIG = {
 
 SUGGESTIONS_INCOMPATIBLE = ("brave-search", "github", "youtube", "reddit")
 
+# Linux desktop User-Agent templates
+TEMPLATES = {
+    "firefox": "Mozilla/5.0 (X11; Linux x86_64; rv:{ver}) Gecko/20100101 Firefox/{ver}",
+    "chrome": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver} Safari/537.36",
+    "chromium": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver} Safari/537.36",
+    "brave": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver} Safari/537.36",
+}
+
+FALLBACK_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
+
 
 def cleanhtml(txt):
     return re.sub(r"<.*?>", "", txt)
 
 
-def fetch_suggestions(search_string):
-    ua = UserAgent(
-        platforms=["desktop"],
-        browsers=["chrome", "firefox", "vivaldi", "brave"],
-        os=["Linux"],
-        fallback="Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0",
-    )
-    current_ua = ua.random
+def get_binary_version(binary_name: str) -> str | None:
+    """Runs <binary> --version and parses out the first semantic version string"""
+    bin_path = shutil.which(binary_name)
+    if not bin_path:
+        return None
+
+    try:
+        output = sp.check_output(
+            [bin_path, "--version"], stderr=sp.DEVNULL, timeout=1.0, text=True
+        )
+        match = re.search(r"(\d+(\.\d+)+)", output)
+        return match.group(1) if match else None
+    except (sp.SubprocessError, OSError):
+        return None
+
+
+def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
+    """Returns a valid User_Agent string from cache, updating it if the binary was updated"""
+    bin_path = shutil.which(binary_name)
+
+    # if the binary it not found on PATH, fall back immediately
+    if not bin_path or not os.path.exists(bin_path):
+        return FALLBACK_UA
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    bin_mtime = os.path.getmtime((bin_path))
+
+    # check if cache exists and is newer than the binary itself
+    if os.path.exists(CACHE_FILE):
+        cache_mtime = os.path.getmtime(CACHE_FILE)
+        if cache_mtime >= bin_mtime:
+            try:
+                with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                    cached_data = f.read().strip()
+                    if cached_data:
+                        return cached_data
+            except OSError:
+                pass
+
+    # cache miss or binary was updated by the package manager
+    version = get_binary_version(binary_name)
+    if not version:
+        return FALLBACK_UA
+    template = TEMPLATES.get(browser_key, TEMPLATES["firefox"])
+    user_agent = template.format(ver=version)
+
+    # write the new cache file
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            _ = f.write(user_agent)
+    except OSError:
+        pass
+    return user_agent
+
+
+def fetch_suggestions(search_string: str):
+    user_agent = get_cached_user_agent(BROWSER, CONFIG["BROWSER_PATH"][BROWSER])
+
     if SEARCH_ENGINE == "google":
         r = {
             "q": search_string,
@@ -79,14 +142,14 @@ def fetch_suggestions(search_string):
             "hl": "en-IT",
             "authuser": "0",
         }
-        url = CONFIG["SUGGESTION_URL"][SEARCH_ENGINE] + urllib.parse.urlencode(r)
+        url = str(CONFIG["SUGGESTION_URL"][SEARCH_ENGINE]) + urllib.parse.urlencode(r)
         headers = {
             "sec-fetch-mode": "cors",
             "dnt": "1",
             "accept-encoding": "gzip",
             "accept-language": "en-US;q=0.9,en;q=0.8",
             "pragma": "no-cache",
-            "user-agent": current_ua,
+            "user-agent": user_agent,
             "accept": "*/*",
             "cache-control": "no-cache",
             "authority": "www.google.com",
@@ -110,7 +173,7 @@ def fetch_suggestions(search_string):
             "kl": "wt-wt",
             "_": str(int((datetime.datetime.now().timestamp()) * 1000)),
         }
-        url = CONFIG["SUGGESTION_URL"][SEARCH_ENGINE] + urllib.parse.urlencode(r)
+        url = str(CONFIG["SUGGESTION_URL"][SEARCH_ENGINE]) + urllib.parse.urlencode(r)
         if bang_search:
             url = url.replace("?q=", "?q=!")
         headers = {
@@ -118,7 +181,7 @@ def fetch_suggestions(search_string):
             "dnt": "1",
             "accept-encoding": "gzip",
             "accept-language": "en-US;q=0.9,en;q=0.8",
-            "user-agent": current_ua,
+            "user-agent": user_agent,
             "sec-fetch-mode": "no-cors",
             "accept": "*/*",
             "cache-control": "no-cache",
@@ -159,11 +222,11 @@ def main():
             "are not supported.",
         )
     else:
-        url = CONFIG["SEARCH_URL"][SEARCH_ENGINE] + urllib.parse.quote_plus(
+        url = str(CONFIG["SEARCH_URL"][SEARCH_ENGINE]) + urllib.parse.quote_plus(
             search_string
         )
         sp.Popen(
-            CONFIG["BROWSER_PATH"][BROWSER] + [url],
+            str(CONFIG["BROWSER_PATH"][BROWSER]) + str([url]),
             stdout=sp.DEVNULL,
             stderr=sp.DEVNULL,
             shell=False,
