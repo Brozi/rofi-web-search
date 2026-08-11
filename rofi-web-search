@@ -10,6 +10,7 @@ import subprocess as sp
 import sys
 import urllib.parse
 import urllib.request
+from typing import TypedDict
 
 ################################################################################
 #####                      C O N F I G U R A T I O N                      ######
@@ -20,8 +21,18 @@ CONFIG_DIR = os.path.expanduser("~/.config/rofi-web-search")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 
+class ConfigDict(TypedDict):
+    SEARCH_ENGINES: dict[str, str]
+    DEFAULT_SEARCH_ENGINE: str
+    BROWSER: str
+    TERMINAL: str
+    TERMINAL_ARG: str
+
+
 ################################################################################
-def load_config():
+
+
+def load_config() -> ConfigDict:
     _config = DEFAULT_CONFIG.copy()
     try:
         with open(CONFIG_FILE, "r") as f:
@@ -83,8 +94,17 @@ TEMPLATES = {
 
 FALLBACK_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
 
-DEFAULT_CONFIG = {
-    "SEARCH_ENGINE": "google",
+DEFAULT_CONFIG: ConfigDict = {
+    "SEARCH_ENGINES": {
+        "!g": "google",
+        "!d": "duckduckgo",
+        "!s": "startpage",
+        "!y": "youtube",
+        "!gh": "github",
+        "!r": "reddit",
+        "!b": "brave-search",
+    },
+    "DEFAULT_SEARCH_ENGINE": "startpage",
     "BROWSER": "firefox",
     "TERMINAL": "gnome-terminal",
     "TERMINAL_ARG": "--",
@@ -149,17 +169,18 @@ def get_cached_user_agent(browser_key: str, binary_name: str) -> str:
     return user_agent
 
 
-def fetch_suggestions(search_string: str, config: dict[str, str]) -> str | list[str]:
+def fetch_suggestions(
+    search_string: str, active_engine: str, config: ConfigDict
+) -> str | list[str]:
     browser_key = config["BROWSER"]
-    search_engine = config["SEARCH_ENGINE"]
     binary_name = BINARY_NAMES[browser_key]
-    if search_engine in SUGGESTIONS_INCOMPATIBLE:
-        return f"Suggestions from {search_engine} are not supported."
-    suggestions_url = SUGGESTION_URLS[browser_key]
+    if active_engine in SUGGESTIONS_INCOMPATIBLE:
+        return f"Suggestions from {active_engine} are not supported."
+    suggestions_url = SUGGESTION_URLS[active_engine]
 
     user_agent = get_cached_user_agent(browser_key, binary_name)
 
-    if search_engine == "google":
+    if active_engine == "google":
         r = {
             "q": search_string,
             "cp": "11",
@@ -188,7 +209,7 @@ def fetch_suggestions(search_string: str, config: dict[str, str]) -> str | list[
         reply_data = gzip.decompress(urllib.request.urlopen(req).read()).split(b"\n")[1]
         reply_data = json.loads(reply_data)
         return [cleanhtml(res[0]).strip() for res in reply_data[0]]
-    elif search_engine == "duckduckgo":  # 'duckduckgo'
+    elif active_engine == "duckduckgo":  # 'duckduckgo'
         if search_string.startswith("!"):
             bang_search = True
             search_string = search_string.lstrip("!")
@@ -222,7 +243,7 @@ def fetch_suggestions(search_string: str, config: dict[str, str]) -> str | list[
             re.match(r"autocompleteCallback\((.*)\);", reply_data).group(1)
         )
         return [cleanhtml(res["phrase"]).strip() for res in reply_data]
-    elif search_engine == "startpage":
+    elif active_engine == "startpage":
         return []
     else:
         return []
@@ -258,23 +279,32 @@ def validate_config(config: dict[str, str]):
 
 if __name__ == "__main__":
     config = load_config()
-    search_engine = config["SEARCH_ENGINE"]
+    default_search_engine = config["DEFAULT_SEARCH_ENGINE"]
+    search_engines = config["SEARCH_ENGINES"]
     search_string = html.unescape((" ".join(sys.argv[1:])).strip())
     browser_key = config["BROWSER"]
 
+    query_parts = search_string.split(" ", 1)
+    if query_parts[0] in search_engines:
+        active_engine = search_engines[query_parts[0]]
+        search_string = query_parts[1] if len(query_parts) > 1 else ""
+    else:
+        active_engine = config["DEFAULT_SEARCH_ENGINE"]
+
     if search_string.endswith("!"):
         search_string = search_string.rstrip("!").strip()
-        results = fetch_suggestions(search_string, config)
+        results = fetch_suggestions(search_string, active_engine, config)
         if results:
             for r in results:
                 print(html.unescape(r))
         else:
             print("!!-- No suggestions found")
     elif search_string == "":
-        print(f"!!-- Type something and search it with {search_engine} ")
-        print('!!-- Close your search string with "!" to get search suggestions')
+        print(f"!!-- Type something and search it with {default_search_engine} ")
+        print("!!-- Close your search string with '!' to get search suggestions")
+        print("!!-- Start your search string with '!' to choose the search engine")
     else:
-        url = SEARCH_URLS[search_engine] + urllib.parse.quote_plus(search_string)
+        url = SEARCH_URLS[active_engine] + urllib.parse.quote_plus(search_string)
         _ = sp.Popen(
             [BINARY_NAMES[browser_key], url],
             stdout=sp.DEVNULL,
