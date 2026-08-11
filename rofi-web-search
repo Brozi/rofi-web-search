@@ -8,9 +8,10 @@ import re
 import shutil
 import subprocess as sp
 import sys
+from urllib.error import URLError
 import urllib.parse
 import urllib.request
-from typing import TypedDict
+from typing import TypedDict, cast
 
 ################################################################################
 #####                      C O N F I G U R A T I O N                      ######
@@ -30,6 +31,55 @@ class ConfigDict(TypedDict):
 
 
 ################################################################################
+
+DEFAULT_CONFIG: ConfigDict = {
+    "SEARCH_ENGINES": {
+        "!g": "google",
+        "!d": "duckduckgo",
+        "!s": "startpage",
+        "!y": "youtube",
+        "!gh": "github",
+        "!r": "reddit",
+        "!b": "brave-search",
+    },
+    "DEFAULT_SEARCH_ENGINE": "google",
+    "BROWSER": "firefox",
+    "TERMINAL": "gnome-terminal",
+    "TERMINAL_ARG": "--",
+}
+
+
+def validate_config(config: dict[str, object]):
+    for key in DEFAULT_CONFIG.keys():
+        if key not in config:
+            print(f"Configuration file is missing {key}", file=sys.stderr)
+            sys.exit(1)
+    for key in (
+        "DEFAULT_SEARCH_ENGINE",
+        "BROWSER",
+        "TERMINAL",
+        "TERMINAL_ARG",
+    ):
+        if key in config and not isinstance(config[key], str):
+            print(
+                f"Configuration Error: The value of {key} must be a string",
+                file=sys.stderr,
+            )
+    _raw_engines = config["SEARCH_ENGINES"]
+    if not isinstance(config["SEARCH_ENGINES"], dict):
+        print(
+            "Configuration Error: SEARCH_ENGINES must be a JSON object", file=sys.stderr
+        )
+        sys.exit(1)
+    _search_engines = cast(dict[object, object], _raw_engines)
+
+    for bang_key, engine_name in _search_engines.items():
+        if not isinstance(bang_key, str) or not isinstance(engine_name, str):
+            print(
+                f"Configuration Error: SEARCH_ENGINES keys and values must be strings (failed on: {bang_key}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
 
 def load_config() -> ConfigDict:
@@ -93,22 +143,6 @@ TEMPLATES = {
 }
 
 FALLBACK_UA = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
-
-DEFAULT_CONFIG: ConfigDict = {
-    "SEARCH_ENGINES": {
-        "!g": "google",
-        "!d": "duckduckgo",
-        "!s": "startpage",
-        "!y": "youtube",
-        "!gh": "github",
-        "!r": "reddit",
-        "!b": "brave-search",
-    },
-    "DEFAULT_SEARCH_ENGINE": "startpage",
-    "BROWSER": "firefox",
-    "TERMINAL": "gnome-terminal",
-    "TERMINAL_ARG": "--",
-}
 
 
 def cleanhtml(txt):
@@ -244,37 +278,32 @@ def fetch_suggestions(
         )
         return [cleanhtml(res["phrase"]).strip() for res in reply_data]
     elif active_engine == "startpage":
-        return []
+        r = {"q": search_string}
+        url = suggestions_url + urllib.parse.urlencode(r)
+        headers = {
+            "pragma": "no-cache",
+            "dnt": "1",
+            "accept-encoding": "gzip",
+            "accept-language": "en-US;q=0.9,en;q=0.8",
+            "user-agent": user_agent,
+            "sec-fetch-mode": "no-cors",
+            "accept": "*/*",
+            "cache-control": "no-cache",
+            "authority": "duckduckgo.com",
+            "referer": "https://duckduckgo.com/",
+            "sec-fetch-site": "same-origin",
+        }
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        try:
+            # 1.0 timeout to prevent rofi from freezing
+            response = urllib.request.urlopen(req, timeout=1.0)
+            reply_data = json.loads(response.read().decode("utf-8"))
+            # Open search format
+            return [cleanhtml(res).strip() for res in reply_data[1]]
+        except (URLError, IndexError):
+            return []
     else:
         return []
-
-
-def validate_config(config: dict[str, str]):
-    if type(config) is not dict:
-        print("Configuration file must be a JSON object", file=sys.stderr)
-        sys.exit(1)
-    for key in DEFAULT_CONFIG.keys():
-        if key not in config:
-            print(f"Configuration file is missing {key}", file=sys.stderr)
-            sys.exit(1)
-    for key in ("SEARCH_ENGINE", "BROWSER"):
-        if type(config[key]) is not str:
-            print(
-                f"Configuration Error: The value of {key} must be a string",
-                file=sys.stderr,
-            )
-    if type(config["TERMINAL"]) is not str:
-        print(
-            "Configuration Error: The value of TERMINAL must be a string",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    if type(config["TERMINAL_ARG"]) is not str:
-        print(
-            "Configuration Error: The value of TERMINAL_ARG must be a string",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
 
 if __name__ == "__main__":
