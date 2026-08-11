@@ -223,7 +223,9 @@ def fetch_suggestions(search_string: str, config: dict[str, str]) -> str | list[
         )
         return [cleanhtml(res["phrase"]).strip() for res in reply_data]
     elif search_engine == "startpage":
-        pass
+        return []
+    else:
+        return []
 
 
 def validate_config(config: dict[str, str]):
