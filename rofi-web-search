@@ -128,8 +128,8 @@ SEARCH_URLS = {
 }
 SUGGESTION_URLS = {
     "google": "https://www.google.com/complete/search?",
-    "duckduckgo": "https://duckduckgo.com/ac/?",
-    "startpage": "https://www.startpage.com/suggestions?q=",
+    "duckduckgo": "https://duckduckgo.com/ac",
+    "startpage": "https://www.startpage.com/osuggestions?",
 }
 
 SUGGESTIONS_INCOMPATIBLE = ["brave-search", "github", "youtube", "reddit"]
